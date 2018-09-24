@@ -1,26 +1,28 @@
-library(ineq)
-library(car)
-library(caret)
+# library(ineq)
+# library(car)
+# library(caret)
 library(rpart)
 library(randomForest)
 library(RColorBrewer)
-library(rpart.plot)
-library(rattle)
+# library(rpart.plot)
+# library(rattle)
 library(caTools)
 library(gplots)
 library(ROCR) 
 
-setwd ("E:/Akxay/GLIM/Data Mining/Assignment")
+setwd ("E:/Akxay/GLIM/Data Mining/")
 getwd()
 
 ## Data Import
 data <- read.table("HR_Employee_Attrition_Data.csv", sep = ",", header = T)
 dim(data)
 
+## check type of variables
 str(data)
+## summary of data
 summary(data)
 
-## Converting Data to variables for further EDA
+## Converting variables to factor for further EDA
 data$Attrition <- as.factor(data$Attrition)
 data$BusinessTravel <- as.factor(data$BusinessTravel)
 data$Department <- as.factor(data$Department)
@@ -44,6 +46,35 @@ data$Flag[data$Attrition == "Yes"] <- 1
 data$Flag[data$Attrition == "No"] <- 0
 data$Flag <- as.factor(data$Flag)
 
+##--------------------------Data Pre-processing--------------------------------------
+# 1. calculate number of NA's from your data frame
+count_NA <- function(dataFrame) {
+  df=data.frame()
+  for (n in 1:ncol(dataFrame)){
+    df[n,1]=colnames(dataFrame)[n]
+    df[n,2]=sum(is.na(dataFrame[n]))
+    names(df) <- c("colName","NA_Count")
+  }
+  return (df[order(-df$NA_Count),])
+}
+
+View(count_NA(data))
+# No null values
+
+# 2. Unique categories count
+unique_cat_count <- function(dataFrame) {
+  df=data.frame(rapply(dataFrame[,unlist(lapply(dataFrame, is.factor))],function(x)length(unique(x))))
+  df=data.frame(as.factor(rownames(df)),df)
+  colnames(df)[1]="cat_columns"
+  colnames(df)[2]="cat_count"
+  row.names(df) <- NULL
+  return (df[order(-df[,2]),])
+}
+
+View(unique_cat_count(data))
+
+# max categories is 10
+##--------------------------Exploratory Data Analysis--------------------------------------
 # Plotting univariate summaries in the data 
 par(mfrow= c(1,2))
 
@@ -134,8 +165,9 @@ barplot(table(data$JobLevel,data$Flag),
         legend = rownames(table(data$JobLevel,data$Flag)),beside=TRUE)
 
 
+# ---------------------------------Modeling------------------------------------
 
-# split data into dev and holdout
+# split data into dev/train and holdout/validation
 
 data$Attrition = factor(data$Attrition, levels = c("No","Yes"), labels=c(0,1))
 data$Attrition = as.numeric(as.character(data$Attrition))
@@ -157,7 +189,7 @@ library(randomForest)
 View(RFDF.dev)
 ## Calling syntax to build the Random Forest
 RF <- randomForest(as.factor(RFDF.dev$Attrition) ~ ., data = RFDF.dev[,-c(2,9,10,22,27,36,37)], 
-                   ntree=51, mtry = 9, nodesize = 60,
+                   ntree=101, mtry = 9, nodesize = 60,
                    importance=TRUE, set.seed(1))
 
 
@@ -203,6 +235,11 @@ RFDF.dev$predict.score.RF <- predict(tRF, RFDF.dev, type="prob")
 head(RFDF.dev)
 class(RFDF.dev$predict.score.RF)
 
+library(ggplot2)
+hist(RFDF.dev$predict.score.RF[,2])
+ggplot(RFDF.dev, aes(predict.score.RF[,2], fill = as.factor(Attrition))) + geom_histogram(alpha = 0.5, aes(y = ..density..), position = 'identity')
+ggplot(RFDF.dev, aes(predict.score.RF[,2], fill = as.factor(Attrition))) + geom_density(alpha = 0.1)
+
 ## deciling
 ## deciling code
 decile <- function(x){
@@ -225,6 +262,7 @@ decile <- function(x){
 
 
 RFDF.dev$deciles <- decile(RFDF.dev$predict.score.RF[,2])
+
 
 
 library(data.table)
@@ -504,58 +542,3 @@ final.df.holdout$deciles.final <- decile(final.df.holdout$avg.score)
 ## Assgining 0 / 1 class based on certain threshold
 final.df.holdout$final.class = ifelse(final.df.holdout$avg.score<0.1,1,0)
 with( final.df.holdout, table(Attrition, as.factor(final.class)  ))
-
-
-# ensemble output does not outperform the Individual Neaural Network Model. 
-
-# function to get dummy variables
-
-createDummyVariables = function(dataframe){
-  BusinessTravel.matrix = model.matrix(~ BusinessTravel - 1, data = dataframe)
-  dataframe$BusinessTravel=NULL
-  Department.matrix = model.matrix(~ Department - 1, data = dataframe)
-  dataframe$Department = NULL
-  Education.matrix = model.matrix(~ Education - 1, data = dataframe)
-  dataframe$Education = NULL
-  EducationField.matrix = model.matrix(~ EducationField - 1, data = dataframe)
-  dataframe$EducationField=NULL
-  EnvironmentSatisfaction.matrix = model.matrix(~ EnvironmentSatisfaction - 1, data = dataframe)
-  dataframe$EnvironmentSatisfaction=NULL
-  Gender.matrix = model.matrix(~ Gender - 1, data = dataframe)
-  dataframe$Gender=NULL
-  JobInvolvement.matrix = model.matrix(~ JobInvolvement - 1, data = dataframe)
-  dataframe$JobInvolvement=NULL
-  JobLevel.matrix = model.matrix(~ JobLevel - 1, data = dataframe)
-  dataframe$JobLevel=NULL
-  JobRole.matrix = model.matrix(~ JobRole - 1, data = dataframe)
-  dataframe$JobRole=NULL
-  JobSatisfaction.matrix = model.matrix(~ JobSatisfaction - 1, data = dataframe)
-  dataframe$JobSatisfaction=NULL
-  MaritalStatus.matrix = model.matrix(~ MaritalStatus - 1, data = dataframe)
-  dataframe$MaritalStatus=NULL
-  NumCompaniesWorked.matrix = model.matrix(~ NumCompaniesWorked - 1, data = dataframe)
-  dataframe$NumCompaniesWorked = NULL
-  OverTime.matrix = model.matrix(~ OverTime - 1, data = dataframe)
-  dataframe$OverTime=NULL
-  PerformanceRating.matrix = model.matrix(~ PerformanceRating - 1, data = dataframe)
-  dataframe$PerformanceRating=NULL
-  RelationshipSatisfaction.matrix = model.matrix(~ RelationshipSatisfaction - 1, data = dataframe)
-  dataframe$RelationshipSatisfaction=NULL
-  StockOptionLevel.matrix = model.matrix(~ StockOptionLevel - 1, data = dataframe)
-  dataframe$StockOptionLevel=NULL
-  TrainingTimesLastYear.matrix = model.matrix(~ TrainingTimesLastYear - 1, data = dataframe)
-  dataframe$TrainingTimesLastYear=NULL
-  WorkLifeBalance.matrix = model.matrix(~ WorkLifeBalance - 1, data = dataframe)
-  dataframe$WorkLifeBalance=NULL
-  dataframe$Flag=NULL
-  dataframe$Over18 = NULL
-  
-  return (data.frame(dataframe, BusinessTravel.matrix, Department.matrix,
-                     Education.matrix, EducationField.matrix, EnvironmentSatisfaction.matrix,
-                     Gender.matrix, JobInvolvement.matrix, JobLevel.matrix,
-                     JobRole.matrix, JobSatisfaction.matrix, MaritalStatus.matrix,
-                     NumCompaniesWorked.matrix, OverTime.matrix, PerformanceRating.matrix,
-                     RelationshipSatisfaction.matrix, StockOptionLevel.matrix, 
-                     TrainingTimesLastYear.matrix, WorkLifeBalance.matrix))
-}
-dim(createDummyVariables(data))
